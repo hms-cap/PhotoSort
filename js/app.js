@@ -38,7 +38,8 @@ const state = {
 };
 
 function clientId() {
-  return CONFIG.GOOGLE_CLIENT_ID || localStorage.getItem('photosort:clientId') || '';
+  try { return CONFIG.GOOGLE_CLIENT_ID || localStorage.getItem('photosort:clientId') || ''; }
+  catch { return CONFIG.GOOGLE_CLIENT_ID || ''; }
 }
 const dec = (p) => state.session?.get(p.id) || null;
 
@@ -162,7 +163,7 @@ function start(folder, photos, mode, resourceKey = null) {
   touchRecent({ id: folder.id, name: folder.name, count: photos.length, rk: resourceKey });
 
   const hash = mode === 'demo' ? '#/demo' : `#/f/${folder.id}${resourceKey ? '?rk=' + encodeURIComponent(resourceKey) : ''}`;
-  if (location.hash !== hash) history.replaceState(null, '', hash);
+  try { if (location.hash !== hash) history.replaceState(null, '', hash); } catch { /* sandboxed frame */ }
 
   $('#folder-name').textContent = folder.name;
   $('#folder-name').title = folder.name;
@@ -870,7 +871,7 @@ function bind() {
 
   $('#btn-home').addEventListener('click', () => {
     state.session?.save();
-    history.replaceState(null, '', location.pathname + location.search);
+    try { history.replaceState(null, '', location.pathname + location.search); } catch { /* sandboxed frame */ }
     renderStart();
   });
   $('#filters').addEventListener('click', (e) => {
@@ -1036,7 +1037,7 @@ function boot() {
   bind();
   if (clientId()) auth.loadGis().catch(() => {});
   const h = location.hash;
-  if (h.startsWith('#/demo')) { openDemo(); return; }
+  if (h.startsWith('#/demo') || h === '#demo' || window.PHOTOSORT_DEMO) { openDemo(); return; }
   const m = h.match(/^#\/f\/([\w-]+)(?:\?rk=([^&]+))?/);
   if (m) {
     const parsed = { id: m[1], resourceKey: m[2] ? decodeURIComponent(m[2]) : null };
