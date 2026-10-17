@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>PhotoSort</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='3' y='7' width='20' height='20' rx='3' fill='%23555'/%3E%3Crect x='9' y='3' width='20' height='20' rx='3' fill='%23e9e6e1'/%3E%3Cpath d='M14 13l3 3 6-6' stroke='%2321a366' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Top bar (grid screen) -->
+  <header id="topbar" hidden>
+    <button id="btn-home" class="icon-btn" title="Open another folder" aria-label="Home">
+      <svg viewBox="0 0 24 24" width="20" height="20"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="folder-title">
+      <div id="folder-name"></div>
+      <div id="folder-meta" class="muted small"></div>
+    </div>
+    <div class="seg filters" id="filters" role="tablist" aria-label="Filter photos">
+      <button data-filter="all" class="on">All <b></b></button>
+      <button data-filter="todo">To review <b></b></button>
+      <button data-filter="p">Picked <b></b></button>
+      <button data-filter="r">Rejected <b></b></button>
+    </div>
+    <div class="tools">
+      <label class="slider" title="How alike photos must be to stack together. Left = no stacking.">
+        <span>Stacking</span><input id="sim" type="range" min="0" max="24" step="1">
+      </label>
+      <label class="slider hide-sm" title="Thumbnail size">
+        <span>Size</span><input id="tile-size" type="range" min="120" max="380" step="10">
+      </label>
+      <button id="btn-help" class="icon-btn" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
+      <button id="btn-review" class="primary">Review &amp; share <span id="pick-count" class="pill">0</span></button>
+    </div>
+  </header>
+  <div id="status-strip" hidden><span id="status-text"></span><div class="bar"><i id="status-bar"></i></div></div>
+  <div id="auth-banner" hidden>Your Google session expired. <button id="btn-reconnect" class="link">Reconnect</button></div>
+
+  <main>
+    <!-- Start -->
+    <section id="screen-start" class="start">
+      <div class="start-card">
+        <div class="brand">
+          <svg viewBox="0 0 32 32" width="30" height="30" aria-hidden="true"><rect x="3" y="7" width="20" height="20" rx="3" fill="#555"/><rect x="9" y="3" width="20" height="20" rx="3" fill="#e9e6e1"/><path d="M14 13l3 3 6-6" stroke="#21a366" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          PhotoSort
+        </div>
+        <h1>Pick the keepers.</h1>
+        <p class="lede">Paste the Google Drive folder your photographer shared. Similar shots are stacked together so you can compare them side by side, pick the best, and send your selection to a new Drive folder for printing.</p>
+        <form id="open-form" autocomplete="off">
+          <input id="link" type="text" inputmode="url" spellcheck="false" placeholder="https://drive.google.com/drive/folders/…" aria-label="Google Drive folder link" required>
+          <button class="primary" type="submit" id="btn-open">Open photos</button>
+        </form>
+        <p id="start-msg" class="msg" hidden></p>
+        <div id="setup" class="setup" hidden>
+          <p><b>One-time setup needed.</b> This copy of PhotoSort has no Google OAuth Client ID yet. Follow the <a href="https://github.com/hms-cap/photosort#google-cloud-setup" target="_blank" rel="noopener">setup guide</a>, then paste the Client ID here (saved in this browser only).</p>
+          <div class="row"><input id="cid" placeholder="1234-abc.apps.googleusercontent.com"><button id="save-cid">Save</button></div>
+        </div>
+        <div id="recent" hidden>
+          <h3>Recent folders</h3>
+          <ul></ul>
+        </div>
+        <div class="start-foot">
+          <button id="btn-demo" class="link">Try it with demo photos</button>
+          <span class="muted">·</span>
+          <span class="muted">Your choices are saved in this browser as you go.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Loading -->
+    <section id="screen-loading" class="loading" hidden>
+      <div class="spinner"></div>
+      <p id="loading-text">Opening folder…</p>
+    </section>
+
+    <!-- Grid -->
+    <section id="screen-grid" hidden>
+      <div id="grid" class="grid" role="grid" aria-label="Photos"></div>
+      <p id="grid-empty" class="empty" hidden></p>
+    </section>
+  </main>
+
+  <!-- Viewer -->
+  <div id="viewer" class="overlay viewer" hidden role="dialog" aria-label="Photo viewer">
+    <div class="v-top">
+      <button id="v-close" class="icon-btn" title="Back to grid (Esc)" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </button>
+      <div class="v-title">
+        <div id="v-name"></div>
+        <div id="v-pos" class="muted small"></div>
+      </div>
+      <div class="seg" id="v-mode">
+        <button data-mode="compare" title="See the whole stack side by side (C)">Compare</button>
+        <button data-mode="single" title="One photo, large (Enter)">Single</button>
+      </div>
+      <label class="check hide-sm" title="Move to the next photo after picking or rejecting">
+        <input type="checkbox" id="v-auto"> Auto-advance
+      </label>
+    </div>
+    <div class="v-stage" id="v-stage"></div>
+    <div class="v-strip" id="v-strip"></div>
+    <div class="v-actions">
+      <button id="v-prev-set" class="ghost" title="Previous stack (↑)">‹ <span class="hide-sm">Prev stack</span></button>
+      <button id="v-reject" class="act reject" title="Reject (X)">✕ Reject <kbd>X</kbd></button>
+      <button id="v-pick" class="act pick" title="Pick (P)">✓ Pick <kbd>P</kbd></button>
+      <button id="v-only" class="act" title="Pick this one, reject the rest of the stack (Shift+P)">Keep only <span class="hide-sm">this</span> <kbd>⇧P</kbd></button>
+      <button id="v-next-set" class="ghost" title="Next stack (↓)"><span class="hide-sm">Next stack</span> ›</button>
+    </div>
+  </div>
+
+  <!-- Review & share -->
+  <div id="review" class="overlay panel" hidden role="dialog" aria-label="Review and share">
+    <div class="panel-card">
+      <div class="panel-head">
+        <h2>Selected for print <span id="r-count" class="pill"></span></h2>
+        <button id="r-close" class="icon-btn" aria-label="Close">
+          <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+      <div class="panel-body">
+        <div id="r-grid" class="r-grid"></div>
+        <p id="r-empty" class="empty" hidden>Nothing picked yet. Press <kbd>P</kbd> on a photo, or click its ✓, to add it here.</p>
+        <div id="r-prev" class="r-prev" hidden></div>
+        <div class="r-form">
+          <label class="field"><span>New Drive folder name</span><input id="r-name"></label>
+          <label class="check"><input type="checkbox" id="r-anyone" checked> Anyone with the link can view</label>
+          <label class="field"><span>Also share with <span class="muted">(optional, comma separated)</span></span><input id="r-emails" type="text" placeholder="printshop@example.com"></label>
+          <p class="muted small">Copies are created in <b>your</b> Google Drive and count toward your storage. Running this again later only adds new picks and removes un-picked ones.</p>
+        </div>
+        <div id="r-progress" class="r-progress" hidden><div class="bar"><i></i></div><span></span></div>
+        <div id="r-result" class="r-result" hidden></div>
+      </div>
+      <div class="panel-foot">
+        <button id="r-list" class="ghost">Download file list</button>
+        <button id="r-share" class="primary">Create Drive folder</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Help -->
+  <div id="help" class="overlay panel" hidden role="dialog" aria-label="Keyboard shortcuts">
+    <div class="panel-card narrow">
+      <div class="panel-head"><h2>How it works</h2><button id="h-close" class="icon-btn" aria-label="Close">
+        <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
+      <div class="panel-body">
+        <p>Photos taken moments apart that look alike are <b>stacked</b> (the tiles with a number). Open a stack to compare its shots side by side and keep the best one(s). Drag <b>Stacking</b> left for fewer, tighter stacks, or all the way left to turn it off.</p>
+        <table class="keys">
+          <tr><td><kbd>P</kbd> / <kbd>Space</kbd></td><td>Pick (press again to undo)</td></tr>
+          <tr><td><kbd>X</kbd></td><td>Reject (press again to undo)</td></tr>
+          <tr><td><kbd>⇧</kbd>+<kbd>P</kbd></td><td>Keep only this one, reject the rest of the stack</td></tr>
+          <tr><td><kbd>U</kbd></td><td>Clear mark</td></tr>
+          <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next photo</td></tr>
+          <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Previous / next stack</td></tr>
+          <tr><td><kbd>Enter</kbd> / <kbd>C</kbd></td><td>Open photo / switch Single ↔ Compare</td></tr>
+          <tr><td><kbd>Z</kbd> or click</td><td>Zoom to check focus (single view)</td></tr>
+          <tr><td><kbd>Esc</kbd></td><td>Back</td></tr>
+        </table>
+        <p class="muted small">On a phone: swipe left/right between photos and use the buttons at the bottom.</p>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" role="status" aria-live="polite"></div>
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>
