@@ -64,6 +64,19 @@ button:active { transform: translateY(1px); }
 .seg button.on { background: var(--bg-3); color: var(--text); box-shadow: 0 1px 0 rgba(255,255,255,.05) inset; }
 .seg button b { font-weight: 600; margin-left: 2px; opacity: .8; }
 
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border-radius: 8px;
+  border: 1px solid var(--line); background: var(--bg-2); color: var(--muted); font-size: 12px; white-space: nowrap;
+}
+.chip:hover { color: var(--text); border-color: #555; }
+.chip[aria-pressed="true"] { color: var(--text); background: var(--bg-3); }
+.rounds button { color: var(--muted); }
+.rounds button.on { color: var(--accent); }
+.rounds button.next { font-style: italic; }
+select {
+  font: inherit; color: inherit; padding: 9px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--bg-2);
+}
+.r-round { margin-bottom: 14px; max-width: 360px; }
 .check { display: inline-flex; align-items: center; gap: 7px; cursor: pointer; user-select: none; }
 .check input { width: 16px; height: 16px; accent-color: var(--pick); }
 
@@ -81,7 +94,7 @@ button:active { transform: translateY(1px); }
 #btn-review .pill { margin-left: 4px; }
 
 #status-strip {
-  position: sticky; top: 55px; z-index: 19; display: flex; align-items: center; gap: 12px;
+  position: relative; z-index: 19; display: flex; align-items: center; gap: 12px;
   padding: 6px 16px; font-size: 12px; color: var(--muted); background: var(--bg-2); border-bottom: 1px solid var(--line);
 }
 #status-strip .bar { flex: 0 0 160px; }
@@ -284,6 +297,8 @@ table.keys td:first-child { white-space: nowrap; width: 40%; }
 @media (max-width: 760px) {
   #topbar { gap: 8px; padding: 8px 10px; }
   .filters { order: 3; width: 100%; overflow-x: auto; }
+  .rounds { order: 3; width: 100%; overflow-x: auto; }
+  .rounds button { flex: 1; }
   .filters button { flex: 1; padding: 6px 8px; }
   .tools { gap: 8px; }
   .slider input { width: 70px; }

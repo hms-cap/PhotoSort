@@ -18,6 +18,7 @@
       <div id="folder-name"></div>
       <div id="folder-meta" class="muted small"></div>
     </div>
+    <div class="seg rounds" id="rounds" role="tablist" aria-label="Selection rounds" hidden></div>
     <div class="seg filters" id="filters" role="tablist" aria-label="Filter photos">
       <button data-filter="all" class="on">All <b></b></button>
       <button data-filter="todo">To review <b></b></button>
@@ -25,13 +26,15 @@
       <button data-filter="r">Rejected <b></b></button>
     </div>
     <div class="tools">
-      <label class="slider" title="How alike photos must be to stack together. Left = no stacking.">
+      <button id="btn-stack" class="chip" title="Stack similar shots together (S)" aria-pressed="true"></button>
+      <label class="slider" id="sim-wrap" title="How alike photos must be to stack together">
         <span>Stacking</span><input id="sim" type="range" min="0" max="24" step="1">
       </label>
       <label class="slider hide-sm" title="Thumbnail size">
         <span>Size</span><input id="tile-size" type="range" min="120" max="380" step="10">
       </label>
       <button id="btn-help" class="icon-btn" title="Keyboard shortcuts (?)" aria-label="Help">?</button>
+      <button id="btn-newwin" class="ghost hide-sm" title="Open your picks as the next round in a new window" hidden></button>
       <button id="btn-review" class="primary">Review &amp; share <span id="pick-count" class="pill">0</span></button>
     </div>
   </header>
@@ -121,6 +124,7 @@
         </button>
       </div>
       <div class="panel-body">
+        <label class="field r-round" id="r-round-wrap" hidden><span>Share the picks from</span><select id="r-round"></select></label>
         <div id="r-grid" class="r-grid"></div>
         <p id="r-empty" class="empty" hidden>Nothing picked yet. Press <kbd>P</kbd> on a photo, or click its ✓, to add it here.</p>
         <div id="r-prev" class="r-prev" hidden></div>
@@ -146,7 +150,8 @@
       <div class="panel-head"><h2>How it works</h2><button id="h-close" class="icon-btn" aria-label="Close">
         <svg viewBox="0 0 24 24" width="20" height="20"><path d="M6 6l12 12M18 6L6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></div>
       <div class="panel-body">
-        <p>Photos taken moments apart that look alike are <b>stacked</b> (the tiles with a number). Open a stack to compare its shots side by side and keep the best one(s). Drag <b>Stacking</b> left for fewer, tighter stacks, or all the way left to turn it off.</p>
+        <p>Photos taken moments apart that look alike are <b>stacked</b> (the tiles with a number). Open a stack to compare its shots side by side and keep the best one(s). Drag <b>Stacking</b> left for tighter stacks, or use <b>Unstack</b> to see every photo on its own.</p>
+        <p><b>Rounds.</b> Everything you pick moves on to the next round, where only those photos are shown so you can narrow them down again. Switch rounds with the tabs at the top, or open the next round in its own window — both windows stay in sync, so you can go back and forth. Changing a pick in an earlier round updates the later ones.</p>
         <table class="keys">
           <tr><td><kbd>P</kbd> / <kbd>Space</kbd></td><td>Pick (press again to undo)</td></tr>
           <tr><td><kbd>X</kbd></td><td>Reject (press again to undo)</td></tr>
@@ -155,6 +160,8 @@
           <tr><td><kbd>←</kbd> <kbd>→</kbd></td><td>Previous / next photo</td></tr>
           <tr><td><kbd>↑</kbd> <kbd>↓</kbd></td><td>Previous / next stack</td></tr>
           <tr><td><kbd>Enter</kbd> / <kbd>C</kbd></td><td>Open photo / switch Single ↔ Compare</td></tr>
+          <tr><td><kbd>S</kbd></td><td>Stack / unstack similar shots (grid)</td></tr>
+          <tr><td><kbd>[</kbd> <kbd>]</kbd></td><td>Previous / next round (grid)</td></tr>
           <tr><td><kbd>Z</kbd> or click</td><td>Zoom to check focus (single view)</td></tr>
           <tr><td><kbd>Esc</kbd></td><td>Back</td></tr>
         </table>

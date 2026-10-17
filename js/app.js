@@ -30,6 +30,8 @@ const state = {
   visIndex: new Map(),   // photo id -> visible index
   focusId: null,
   filter: 'all',
+  round: 1,              // selection round being viewed (1 = all photos)
+  pendingRound: 1,       // round requested by the URL before the folder loads
   threshold: prefs.get('threshold', 12),
   tile: prefs.get('tile', 210),
   viewer: null,
@@ -41,7 +43,21 @@ function clientId() {
   try { return CONFIG.GOOGLE_CLIENT_ID || localStorage.getItem('photosort:clientId') || ''; }
   catch { return CONFIG.GOOGLE_CLIENT_ID || ''; }
 }
-const dec = (p) => state.session?.get(p.id) || null;
+// Mark of a photo in the round being viewed: 'p' | 'r' | null.
+const dec = (p) => (state.session ? state.session.markIn(p.id, state.round) : null);
+const roundPool = (round = state.round) => state.photos.filter((p) => state.session.inPool(p.id, round));
+const isStacked = (round = state.round) => prefs.get(round === 1 ? 'stack1' : 'stackN', round === 1);
+const roundName = (r) => (r === 1 ? 'Round 1' : `Round ${r}`);
+
+function routeHash(round = state.round) {
+  const base = state.mode === 'demo' ? '#/demo' : `#/f/${state.folder.id}`;
+  const r = round > 1 ? `/r${round}` : '';
+  const rk = state.mode !== 'demo' && state.resourceKey ? `?rk=${encodeURIComponent(state.resourceKey)}` : '';
+  return base + r + rk;
+}
+function syncRoute() {
+  try { if (location.hash !== routeHash()) history.replaceState(null, '', routeHash()); } catch { /* sandboxed frame */ }
+}
 
 let toastTimer;
 function toast(msg, ms = 2600) {
@@ -129,7 +145,7 @@ async function openDrive({ id, resourceKey }) {
       link: f.thumbnailLink || '',
       thumb(size) { return drive.sizedThumb(this.link, size); },
     }));
-    start({ id: folder.id, name: folder.name }, photos, 'drive', resourceKey);
+    start({ id: folder.id, name: folder.name }, photos, 'drive', resourceKey, state.pendingRound);
   } catch (e) {
     if (run !== state.run) return;
     let msg = e.message;
@@ -145,10 +161,10 @@ async function openDemo() {
   setLoading('Generating demo photos…');
   const photos = await makeDemoPhotos();
   if (run !== state.run) return;
-  start({ id: DEMO_ID, name: 'Demo shoot — a day in the park' }, photos, 'demo');
+  start({ id: DEMO_ID, name: 'Demo shoot — a day in the park' }, photos, 'demo', null, state.pendingRound);
 }
 
-function start(folder, photos, mode, resourceKey = null) {
+function start(folder, photos, mode, resourceKey = null, round = 1) {
   state.mode = mode;
   state.folder = folder;
   state.resourceKey = resourceKey;
@@ -160,10 +176,10 @@ function start(folder, photos, mode, resourceKey = null) {
   state.session = new Session(folder.id);
   state.filter = 'all';
   state.focusId = null;
+  state.round = Math.max(1, Math.min(round || 1, state.session.maxLevel() + 1));
+  state.pendingRound = 1;
   touchRecent({ id: folder.id, name: folder.name, count: photos.length, rk: resourceKey });
-
-  const hash = mode === 'demo' ? '#/demo' : `#/f/${folder.id}${resourceKey ? '?rk=' + encodeURIComponent(resourceKey) : ''}`;
-  try { if (location.hash !== hash) history.replaceState(null, '', hash); } catch { /* sandboxed frame */ }
+  syncRoute();
 
   $('#folder-name').textContent = folder.name;
   $('#folder-name').title = folder.name;
@@ -179,9 +195,83 @@ function start(folder, photos, mode, resourceKey = null) {
   hashAll(state.run);
 }
 
+/* ---------- rounds ---------- */
+function switchRound(r) {
+  const last = Math.max(state.round, state.session.maxLevel() + 1);
+  r = Math.max(1, Math.min(r, last));
+  if (r === state.round) return;
+  if (state.viewer) closeViewer(true);
+  state.round = r;
+  state.filter = 'all';
+  state.focusId = null;
+  $$('#filters button').forEach((b) => b.classList.toggle('on', b.dataset.filter === 'all'));
+  syncRoute();
+  regroup();
+  renderGrid();
+  updateCounts();
+  window.scrollTo(0, 0);
+}
+
+function renderRounds() {
+  const s = state.session;
+  const last = Math.max(state.round, s.maxLevel() + 1);
+  const box = $('#rounds');
+  box.hidden = last < 2;
+  if (last < 2) return;
+  let html = '';
+  for (let r = 1; r <= last; r++) {
+    const n = r === 1 ? state.photos.length : state.photos.filter((p) => s.inPool(p.id, r)).length;
+    html += `<button data-round="${r}" class="${r === state.round ? 'on' : ''}" role="tab" aria-selected="${r === state.round}"
+      title="${r === 1 ? 'Every photo' : `The ${plural(n, 'photo')} you picked in round ${r - 1}`}">${roundName(r)} <b>${n.toLocaleString()}</b></button>`;
+  }
+  box.innerHTML = html;
+}
+
+function renderRoundTools() {
+  const stacked = isStacked();
+  const b = $('#btn-stack');
+  b.setAttribute('aria-pressed', String(stacked));
+  b.innerHTML = `${STACK_ICON} ${stacked ? 'Stacked' : 'Unstacked'}`;
+  b.title = stacked ? 'Similar shots are stacked. Click to show every photo separately (S)' : 'Every photo is shown separately. Click to stack similar shots (S)';
+  $('#sim-wrap').hidden = !stacked;
+  const picks = state.photos.filter((p) => dec(p) === 'p').length;
+  const nw = $('#btn-newwin');
+  nw.hidden = picks === 0;
+  nw.textContent = `${roundName(state.round + 1)} in new window ↗`;
+}
+
+function toggleStack() {
+  prefs.set(state.round === 1 ? 'stack1' : 'stackN', !isStacked());
+  regroup();
+  renderGrid();
+  renderRoundTools();
+}
+
+function openRoundWindow() {
+  const r = state.round + 1;
+  state.session.save();
+  const url = location.pathname + location.search + routeHash(r);
+  let w = null;
+  try { w = window.open(url, `photosort-${state.folder.id}-r${r}`); } catch { /* blocked */ }
+  if (w) { toast(`${roundName(r)} opened in a new window. Changes in either window show up in the other.`, 4000); return; }
+  switchRound(r);
+  toast(`Couldn’t open a new window here, so switched to ${roundName(r)}. Use the round tabs to go back.`, 4500);
+}
+
+// Another window changed the selection: pull it in and refresh.
+function onExternalChange() {
+  if (!state.session) return;
+  state.session.reload();
+  regroup();
+  renderGrid();
+  updateCounts();
+  if (state.viewer) updateViewer();
+  if (!$('#review').hidden && !state.sharing) renderReview();
+}
+
 /* ---------- grouping ---------- */
 function regroup() {
-  state.groups = groupPhotos(state.photos, state.session.hashes, { threshold: state.threshold });
+  state.groups = groupPhotos(roundPool(), state.session.hashes, { threshold: isStacked() ? state.threshold : 0 });
 }
 
 async function hashAll(run) {
@@ -266,11 +356,13 @@ function renderGrid() {
   const empty = $('#grid-empty');
   empty.hidden = state.visible.length > 0;
   empty.textContent = !state.photos.length ? 'No photos found in this folder (or its subfolders).'
+    : state.round > 1 && !state.groups.length ? `Nothing here yet. Photos you pick in round ${state.round - 1} appear in ${roundName(state.round)}.`
     : state.filter === 'todo' ? 'All done — every photo has been picked or rejected. 🎉'
     : state.filter === 'p' ? 'Nothing picked yet.'
     : state.filter === 'r' ? 'Nothing rejected.' : '';
   const stacks = state.groups.filter((g) => g.items.length > 1);
-  $('#folder-meta').textContent = `${plural(state.photos.length, 'photo')}` +
+  const n = state.groups.reduce((a, g) => a + g.items.length, 0);
+  $('#folder-meta').textContent = (state.round > 1 ? `${roundName(state.round)} · ${plural(n, 'pick')} from round ${state.round - 1}` : plural(n, 'photo')) +
     (stacks.length ? ` · ${plural(stacks.length, 'stack')} of similar shots` : '');
 }
 
@@ -318,17 +410,23 @@ function setFocus(i, scroll = true) {
 }
 
 function updateCounts() {
-  let p = 0, r = 0;
-  for (const ph of state.photos) { const d = dec(ph); if (d === 'p') p++; else if (d === 'r') r++; }
-  const n = state.photos.length;
+  let p = 0, r = 0, n = 0;
+  for (const ph of state.photos) {
+    const d = dec(ph);
+    if (d === undefined) continue;
+    n++;
+    if (d === 'p') p++; else if (d === 'r') r++;
+  }
   const set = (f, v) => { $(`#filters [data-filter="${f}"] b`).textContent = v.toLocaleString(); };
   set('all', n); set('todo', n - p - r); set('p', p); set('r', r);
   $('#pick-count').textContent = p;
+  renderRounds();
+  renderRoundTools();
 }
 
 /* ---------- marking ---------- */
 function setMark(p, value) {
-  state.session.set(p.id, value);
+  state.session.setIn(p.id, state.round, value);
   if (state.viewer) state.dirtyGrid = true; else updateTile(p);
   updateCounts();
 }
@@ -591,7 +689,8 @@ function toggleZoom(e) {
 }
 
 /* ---------- review & share ---------- */
-const pickedPhotos = () => state.photos.filter((p) => dec(p) === 'p');
+// Photos picked in a given round (what gets shared).
+const pickedPhotos = (round = state.reviewRound || state.round) => state.photos.filter((p) => state.session.level(p.id) >= round);
 const defaultExportName = () => `${state.folder.name} – Print selection`;
 
 function openReview() {
@@ -600,11 +699,25 @@ function openReview() {
   $('#r-result').hidden = true;
   const ex = state.session.exportInfo;
   $('#r-name').value = ex?.name || defaultExportName();
+  const hasHere = pickedPhotos(state.round).length > 0;
+  state.reviewRound = hasHere ? state.round : Math.max(1, state.session.maxLevel());
   renderReview();
   $('#review').hidden = false;
 }
 
 function renderReview() {
+  const maxL = state.session.maxLevel();
+  if (state.reviewRound > Math.max(1, maxL)) state.reviewRound = Math.max(1, maxL);
+  const wrap = $('#r-round-wrap');
+  wrap.hidden = maxL < 2;
+  if (maxL >= 2) {
+    let opts = '';
+    for (let r = 1; r <= maxL; r++) {
+      const n = pickedPhotos(r).length;
+      opts += `<option value="${r}" ${r === state.reviewRound ? 'selected' : ''}>${roundName(r)} — ${plural(n, 'photo')}${r === maxL ? ' (final round)' : ''}</option>`;
+    }
+    $('#r-round').innerHTML = opts;
+  }
   const ps = pickedPhotos();
   $('#r-count').textContent = ps.length;
   $('#r-empty').hidden = ps.length > 0;
@@ -793,6 +906,9 @@ function downloadList() {
 /* ---------- keyboard ---------- */
 function gridKey(e) {
   if (e.key === '?') { openHelp(); e.preventDefault(); return; }
+  if (e.key === 's' || e.key === 'S') { toggleStack(); e.preventDefault(); return; }
+  if (e.key === '[') { switchRound(state.round - 1); e.preventDefault(); return; }
+  if (e.key === ']') { switchRound(state.round + 1); e.preventDefault(); return; }
   const n = state.visible.length;
   if (!n) return;
   let i = state.visIndex.get(state.focusId) ?? -1;
@@ -985,10 +1101,23 @@ function bind() {
   $('#r-close').addEventListener('click', () => { $('#review').hidden = true; });
   $('#r-share').addEventListener('click', share);
   $('#r-list').addEventListener('click', downloadList);
+  $('#r-round').addEventListener('change', (e) => { state.reviewRound = +e.target.value; renderReview(); });
+
+  // rounds
+  $('#rounds').addEventListener('click', (e) => { const b = e.target.closest('[data-round]'); if (b) switchRound(+b.dataset.round); });
+  $('#btn-stack').addEventListener('click', toggleStack);
+  $('#btn-newwin').addEventListener('click', openRoundWindow);
+  window.addEventListener('storage', (e) => {
+    if (state.session && e.key === state.session.storageKey) onExternalChange();
+  });
   $('#r-grid').addEventListener('click', (e) => {
     const b = e.target.closest('[data-unpick]');
     if (!b) return;
-    setMark(state.byId.get(b.dataset.unpick), null);
+    // Remove from the round being shared (and therefore from later rounds).
+    state.session.setIn(b.dataset.unpick, state.reviewRound, null);
+    regroup();
+    renderGrid();
+    updateCounts();
     renderReview();
   });
   $('#r-result').addEventListener('click', async (e) => {
@@ -1037,8 +1166,10 @@ function boot() {
   bind();
   if (clientId()) auth.loadGis().catch(() => {});
   const h = location.hash;
+  const rm = h.match(/\/r(\d+)(?:\?|$)/);
+  state.pendingRound = rm ? +rm[1] : 1;
   if (h.startsWith('#/demo') || h === '#demo' || window.PHOTOSORT_DEMO) { openDemo(); return; }
-  const m = h.match(/^#\/f\/([\w-]+)(?:\?rk=([^&]+))?/);
+  const m = h.match(/^#\/f\/([\w-]+)(?:\/r\d+)?(?:\?rk=([^&]+))?/);
   if (m) {
     const parsed = { id: m[1], resourceKey: m[2] ? decodeURIComponent(m[2]) : null };
     $('#link').value = `https://drive.google.com/drive/folders/${parsed.id}${parsed.resourceKey ? `?resourcekey=${parsed.resourceKey}` : ''}`;

@@ -13,7 +13,12 @@ picking the keepers among many near-identical shots, and sending the selection o
    stack. The **Stacking** slider makes stacks looser or tighter; all the way left turns it off.
 3. **Compare and cull.** Open a stack to see every shot side by side, then pick or reject. Switch to
    *Single* view for a big image, and click (or press `Z`) to zoom in and check focus and closed eyes.
-4. **Review & share.** See everything you picked, then create a new folder in your Google Drive with
+4. **Narrow it down in rounds.** Everything you pick moves on to **Round 2**, which shows only those
+   photos — unstacked by default (toggle **Stacked / Unstacked** any time, or press `S`). Pick again
+   and those go on to Round 3, and so on. Switch rounds with the tabs at the top (or `[` / `]`), or
+   click **Round N in new window** to work on the next round in a separate window: both windows stay
+   in sync, so you can go back to an earlier round, add or drop a photo, and see the later round update.
+5. **Review & share.** Choose which round's picks to share (the latest round is the default). See everything you picked, then create a new folder in your Google Drive with
    copies of those photos, optionally shared via link and/or with specific emails (e.g. the print shop).
    Running it again later only adds new picks and removes un-picked ones — same folder, same link.
 
@@ -32,6 +37,8 @@ There's also a **demo mode** (link on the start screen) that works without any G
 | `↑` `↓` | Previous / next stack |
 | `Enter` / `C` | Peek at one photo large / switch Single ↔ Compare |
 | `Z` | Zoom (single view) |
+| `S` | Stack / unstack similar shots (grid) |
+| `[` `]` | Previous / next round (grid) |
 | `Esc` | Back |
 
 On phones: swipe between photos and use the buttons along the bottom.
