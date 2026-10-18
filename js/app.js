@@ -492,6 +492,7 @@ function updateViewer() {
   $('#v-pick').classList.toggle('on', d === 'p');
   $('#v-reject').classList.toggle('on', d === 'r');
   $('#v-only').hidden = !multi;
+  $('#v-edit').hidden = state.mode !== 'drive';
   $('#v-prev-set').disabled = gi === 0;
   $('#v-next-set').disabled = gi === V.groups.length - 1;
 
@@ -1034,6 +1035,12 @@ function bind() {
 
   // viewer
   $('#v-close').addEventListener('click', () => closeViewer());
+  $('#v-edit').addEventListener('click', () => {
+    if (!state.viewer || state.mode !== 'drive') return;
+    const { p } = current();
+    const rk = p.resourceKey ? `?rk=${encodeURIComponent(p.resourceKey)}` : '';
+    window.open(`edit.html#/file/${p.id}${rk}`, '_blank');
+  });
   $('#v-pick').addEventListener('click', () => vMark('p'));
   $('#v-reject').addEventListener('click', () => vMark('r'));
   $('#v-only').addEventListener('click', keepOnly);

@@ -2,6 +2,7 @@
 import { getToken, expireToken, AuthError } from './auth.js';
 
 const API = 'https://www.googleapis.com/drive/v3';
+const UPLOAD = 'https://www.googleapis.com/upload/drive/v3';
 const FOLDER = 'application/vnd.google-apps.folder';
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -26,24 +27,25 @@ export function parseFolderLink(input) {
   return id ? { id, resourceKey } : null;
 }
 
-async function api(path, { method = 'GET', params = {}, body, ids = [] } = {}) {
-  const url = new URL(API + path);
+async function api(path, { method = 'GET', params = {}, body, ids = [], base = API, raw = false, rawBody, contentType } = {}) {
+  const url = new URL(base + path);
   for (const [k, v] of Object.entries(params)) if (v != null) url.searchParams.set(k, String(v));
   const keyed = ids.filter((i) => resourceKeys.has(i)).map((i) => `${i}/${resourceKeys.get(i)}`);
 
   for (let attempt = 0; ; attempt++) {
     const headers = { Authorization: 'Bearer ' + (await getToken()) };
     if (body) headers['Content-Type'] = 'application/json';
+    if (rawBody && contentType) headers['Content-Type'] = contentType;
     if (keyed.length) headers['X-Goog-Drive-Resource-Keys'] = keyed.join(',');
 
     let res;
     try {
-      res = await fetch(url, { method, headers, body: body ? JSON.stringify(body) : undefined });
+      res = await fetch(url, { method, headers, body: rawBody || (body ? JSON.stringify(body) : undefined) });
     } catch (e) {
       if (attempt < 4) { await sleep(800 * 2 ** attempt); continue; }
       throw new Error('Network error talking to Google Drive.');
     }
-    if (res.ok) return res.status === 204 ? null : res.json();
+    if (res.ok) return raw ? res : res.status === 204 ? null : res.json();
 
     let info = {};
     try { info = await res.json(); } catch { /* no body */ }
@@ -169,5 +171,56 @@ export async function shareWithEmail(id, email) {
     method: 'POST',
     params: { supportsAllDrives: true, sendNotificationEmail: true },
     body: { role: 'reader', type: 'user', emailAddress: email },
+  });
+}
+
+/* ---------- single files (used by the photo editor) ---------- */
+
+export async function getFile(id) {
+  return api(`/files/${id}`, {
+    params: {
+      fields: 'id,name,mimeType,parents,resourceKey,thumbnailLink,size,capabilities(canDownload),imageMediaMetadata(width,height)',
+      supportsAllDrives: true,
+    },
+    ids: [id],
+  });
+}
+
+// Full-resolution original bytes.
+export async function downloadFile(id) {
+  const res = await api(`/files/${id}`, { params: { alt: 'media', supportsAllDrives: true }, ids: [id], raw: true });
+  return res.blob();
+}
+
+// Can the signed-in user add files to this folder?
+export async function canAddTo(folderId) {
+  try {
+    const r = await api(`/files/${folderId}`, {
+      params: { fields: 'id,name,capabilities(canAddChildren)', supportsAllDrives: true },
+      ids: [folderId],
+    });
+    return r.capabilities?.canAddChildren ? r : null;
+  } catch {
+    return null;
+  }
+}
+
+// Uploads a new file (multipart). parentId may be null for My Drive.
+export async function uploadFile(blob, name, parentId) {
+  const boundary = 'photosort' + Math.random().toString(36).slice(2);
+  const meta = { name, mimeType: blob.type };
+  if (parentId) meta.parents = [parentId];
+  const body = new Blob([
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n`,
+    `--${boundary}\r\nContent-Type: ${blob.type}\r\n\r\n`,
+    blob,
+    `\r\n--${boundary}--`,
+  ]);
+  return api('/files', {
+    method: 'POST',
+    base: UPLOAD,
+    params: { uploadType: 'multipart', fields: 'id,name,webViewLink,parents', supportsAllDrives: true },
+    rawBody: body,
+    contentType: `multipart/related; boundary=${boundary}`,
   });
 }
