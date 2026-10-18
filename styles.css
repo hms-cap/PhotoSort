@@ -311,3 +311,6 @@ table.keys td:first-child { white-space: nowrap; width: 40%; }
   .act kbd, .v-actions kbd { display: none; }
   #open-form { flex-direction: column; }
 }
+
+.home-link { display: inline-block; margin-bottom: 18px; color: var(--muted); text-decoration: none; font-size: 13px; }
+.home-link:hover { color: var(--text); }

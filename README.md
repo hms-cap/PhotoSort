@@ -5,7 +5,43 @@ picking the keepers among many near-identical shots, and sending the selection o
 
 **Live app:** https://hms-cap.github.io/PhotoSort/ (after the one-time setup below)
 
-## What it does
+The home page has two tools:
+
+- **Edit a photo** (`edit.html`) — a photo editor for one picture, opened from your device or a Drive link.
+- **Sort a shoot** (`sort.html`) — the selection tool described below.
+
+Old links that went straight to a folder (`…/PhotoSort/#/f/<folder>`) still open the sorter.
+
+## Photo editor
+
+Open a photo by choosing a file, dropping it on the page, pasting it, or pasting a Google Drive link
+— either to a single photo or to a folder (you then pick a photo from the folder and can step through
+it with ‹ ›). In the sorter's viewer, **Edit** opens the current photo in the editor in a new tab.
+
+| Tool | What you can do |
+| --- | --- |
+| **Crop** | Free or fixed aspect ratios (square, 4:5/8×10, 5×7, 2:3/4×6, 3:4, 16:9, 9:16), rotate 90°, flip, straighten ±45° |
+| **Adjust** | Exposure, brightness, contrast, highlights, shadows, whites, blacks, warmth, tint, saturation, vibrance, hue, clarity, sharpness, fade, vignette, grain — plus **Auto enhance** |
+| **Filters** | 15 looks (Vivid, Warm, Golden, Teal & Orange, Film, Matte, Vintage, Mono, Noir, Sepia, …) with a strength slider |
+| **Retouch** | Heal brush (paints away spots and small objects) and blur brush |
+| **Text** | Several fonts, size, color, bold/italic, alignment, shadow, outline, label background; drag to place |
+| **Draw** | Pen, marker and eraser in any color |
+| **Background** | Removes the background behind people (MediaPipe, in the browser); replace with transparency, a color, or a blur |
+
+Edits are non-destructive: undo/redo everything, hold **Before** (or `\`) to compare with the original,
+**Reset** to start over. **Save** downloads a JPEG, PNG or WebP (original size or smaller), or saves a
+copy to Google Drive — into the original's folder when you're allowed to add files there, otherwise
+to My Drive. The original is never modified.
+
+Shortcuts: `Ctrl/⌘+Z` undo, `Ctrl/⌘+Shift+Z` redo, `Ctrl/⌘+S` save, `+`/`−`/`0` zoom, scroll or pinch
+to zoom, `Space`+drag to pan, `[` `]` brush size, `Delete` removes the selected text.
+
+Notes: adjustments are rendered with WebGL2 (all current browsers). Interactive editing works on a
+copy of up to 2560px; saving at original size re-renders from the full-resolution original. HEIC
+files open in Safari; elsewhere, Drive photos fall back to Drive's own large preview. Background
+removal downloads a ~16 MB model from Google the first time and is designed for photos of people.
+
+## Photo sorter
 
 1. **Paste a Drive folder link** from your photographer and sign in with Google. Subfolders are included.
 2. **Similar shots are stacked.** Photos are ordered by capture time, and shots taken moments apart
@@ -76,8 +112,8 @@ app in Testing. Choose **Continue**.
 
 ### Why the full `drive` scope?
 
-The app has to read a folder *someone else* shared with you and copy those files into a new folder
-in *your* Drive. Narrower scopes (`drive.file`) can't see files the app didn't create or that weren't
+The app has to read a folder *someone else* shared with you, copy those files into a new folder
+in *your* Drive, and (in the editor) save edited copies next to the originals. Narrower scopes (`drive.file`) can't see files the app didn't create or that weren't
 opened through Google's file picker, so pasting a link wouldn't work. Everything happens in your
 browser — there's no server, and the access token is kept only in the tab's session storage.
 
@@ -96,15 +132,26 @@ browser only).
 ## Project layout
 
 ```
-index.html          page structure
-styles.css          styles
-js/app.js           UI: start screen, stacked grid, viewer/compare, review & share
+index.html          home page (Edit a photo / Sort a shoot)
+sort.html           sorter page structure
+edit.html           editor page structure
+styles.css          shared styles
+editor.css          editor styles
+js/app.js           sorter UI: start screen, stacked grid, viewer/compare, review & share
 js/drive.js         Google Drive v3 calls (list, copy, share) with retry/backoff
 js/auth.js          Google Identity Services sign-in (token model)
 js/similarity.js    perceptual hashing + grouping of similar shots
 js/store.js         localStorage autosave (picks, hashes, last export, preferences)
 js/demo.js          synthetic demo shoot
 js/config.js        Google OAuth Client ID (written by the deploy workflow)
+js/editor/main.js       editor UI: open, tools, pointer/zoom, export
+js/editor/state.js      edit state, sliders, filter looks, undo history
+js/editor/geometry.js   rotate/flip/straighten/crop maths
+js/editor/gl.js         WebGL2 colour pipeline (light, colour, detail, looks)
+js/editor/pipeline.js   retouch → geometry → colour → background → text/drawings
+js/editor/retouch.js    heal (pyramid fill) and blur brushes
+js/editor/overlays.js   text and drawing rendering
+js/editor/segment.js    background removal (MediaPipe image segmenter)
 .github/workflows/pages.yml   GitHub Pages deployment
 ```
 
